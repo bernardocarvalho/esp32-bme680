@@ -3,6 +3,7 @@
  *
  * ESP32 have two I2C (I2C0 and I2C1) bus
  *
+ * 
  * OLED is connected to I2C0, so if scan with Wire (I2C0), the return address should be 0x3C.
  *
  * If you need scan other device address in I2C1...
