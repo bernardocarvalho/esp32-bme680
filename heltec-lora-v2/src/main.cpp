@@ -24,6 +24,7 @@
 
 #include "Arduino.h"
 #include "heltec.h"
+#include <EEPROM.h>
 #include "bsec.h"
 
 #include <WiFi.h>
@@ -34,13 +35,36 @@ const char* password = "dpsjKk34U2";
 
 #define BME680_I2C_ADDR 0x77
 
+/* Configure the BSEC library with information about the sensor
+    18v/33v = Voltage at Vdd. 1.8V or 3.3V
+    3s/300s = BSEC operating mode, BSEC_SAMPLE_RATE_LP or BSEC_SAMPLE_RATE_ULP
+    4d/28d = Operating age of the sensor in days
+    generic_18v_3s_4d
+    generic_18v_3s_28d
+    generic_18v_300s_4d
+    generic_18v_300s_28d
+    generic_33v_3s_4d
+    generic_33v_3s_28d
+    generic_33v_300s_4d
+    generic_33v_300s_28d
+*/
+const uint8_t bsec_config_iaq[] = {
+#include "config/generic_33v_3s_4d/bsec_iaq.txt"
+};
+#define STATE_SAVE_PERIOD	UINT32_C(360 * 60 * 1000) // 360 minutes - 4 times a day
+
 // Helper functions declarations
 void checkIaqSensorStatus(void);
 void errLeds(void);
+void loadState(void);
+void updateState(void);
 
-void read_bme680(void);
+void print_bme680(unsigned long time);
 
 Bsec iaqSensor;
+uint8_t bsecState[BSEC_MAX_STATE_BLOB_SIZE] = {0};
+uint16_t stateUpdateCounter = 0;
+
 String output;
 
 void connect_wifi()
@@ -108,22 +132,31 @@ void scan_I2C()
   Serial.println("done\n");
 
 }
+
 void setup()
 {
   Heltec.begin(true /*DisplayEnable Enable*/, false /*LoRa Disable*/, true /*Serial Enable*/);
-	Heltec.begin(true, false, true);
 	Wire.begin(SDA_OLED, SCL_OLED); //Scan OLED's I2C address via I2C0
 	//Wire1.begin(SDA, SCL);        //If there have other device on I2C1, scan the device address via I2C1
 
-   Serial.begin(115200); //Not needed
-   while(!Serial);    // time to get serial running
-   Serial.println(F("BME680 test Init"));
+  EEPROM.begin(BSEC_MAX_STATE_BLOB_SIZE + 1); // 1st address for the length
+  Serial.begin(115200); //Not needed
+  while(!Serial);    // time to get serial running
+    delay(5000);
+  //Serial.println(F("0, BME680 test Init"));
 
   iaqSensor.begin(BME680_I2C_ADDR, Wire);
-  output = "\nBSEC library version " + String(iaqSensor.version.major) + "." + String(iaqSensor.version.minor) + "." + String(iaqSensor.version.major_bugfix) + "." + String(iaqSensor.version.minor_bugfix);
+  output = "0, BSEC library version " + String(iaqSensor.version.major) + "." + String(iaqSensor.version.minor) + "." + String(iaqSensor.version.major_bugfix) + "." + String(iaqSensor.version.minor_bugfix);
   Serial.println(output);
   checkIaqSensorStatus();
-  Serial.println("BME680 0x77 OK");
+
+  iaqSensor.setConfig(bsec_config_iaq);
+  checkIaqSensorStatus();
+
+  loadState();
+
+  Serial.println("0, BME680 0x77 OK");
+
   bsec_virtual_sensor_t sensorList[10] = {
     BSEC_OUTPUT_RAW_TEMPERATURE,
     BSEC_OUTPUT_RAW_PRESSURE,
@@ -139,11 +172,11 @@ void setup()
 
   iaqSensor.updateSubscription(sensorList, 10, BSEC_SAMPLE_RATE_LP);
   checkIaqSensorStatus();
-   Heltec.display->flipScreenVertically();
+
+  Heltec.display->flipScreenVertically();
   Heltec.display->setFont(ArialMT_Plain_10);
 // clear the display
   Heltec.display->clear();
-   //display.setTextColor(WHITE, BLACK);
 
   Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);
   Heltec.display->drawString(0, 0, "Starting BME ");
@@ -151,23 +184,38 @@ void setup()
   //Heltec.display->drawString(10, 128, String(millis()));
   // write the buffer to the display
     Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
-  Heltec.display->drawString(0, 10, "Temp VOC IAQ");
+  Heltec.display->drawString(0, 11, "Temp   P (mBar)  Hum %");
+
+  //Heltec.display->drawString(0, 9, "Temp VOC IAQ");
 
   // The coordinates define the center of the text
   //Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
   //Heltec.display->drawString(64, 22, "Center aligned (64,22)");
 
   // The coordinates define the right end of the text
-  Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);
-  Heltec.display->drawString(128, 33, "Right aligned (128,33)");
+  //Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);
+  //Heltec.display->drawString(128, 33, "Right aligned (128,33)");
 
   Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
-  Heltec.display->drawString(0, 44, "Temp:");
+  Heltec.display->drawString(0, 33, "VOC      Iac      Iacq");
 
 
   Heltec.display->display();
+  errLeds();
   //connect_wifi();
 
+}
+
+
+void loop(void)
+{
+  unsigned long time_trigger = millis();
+  if (iaqSensor.run()) { // If new data is available
+    print_bme680(time_trigger);
+    updateState();
+  } else {
+    checkIaqSensorStatus();
+  }
 }
 
 void loop2()
@@ -177,7 +225,7 @@ void loop2()
 }
 
 void print_bme680(unsigned long time){
-    output = String(time);
+    output = "1, " + String(time);
     output += ", " + String(iaqSensor.rawTemperature);
     output += ", " + String(iaqSensor.pressure);
     output += ", " + String(iaqSensor.rawHumidity);
@@ -190,77 +238,52 @@ void print_bme680(unsigned long time){
     output += ", " + String(iaqSensor.co2Equivalent);
     output += ", " + String(iaqSensor.breathVocEquivalent);
     Serial.println(output);
-  
-  }
-void loop(void)
-{
-  unsigned long time_trigger = millis();
-  if (iaqSensor.run()) { // If new data is available
-    print_bme680(time_trigger);
+
+   //   Heltec.display->clear();
+    Heltec.display->setColor(BLACK);
+    Heltec.display->fillRect(10, 22, 140, 10);
+    //Heltec.display->fillRect(60, 22, 40, 10);
+    Heltec.display->fillRect(10, 44, 140, 10);
+    //Heltec.display->drawString(20, 22, "              ");
+    Heltec.display->setColor(WHITE);
     Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
-    Heltec.display->drawString(20, 22, "              ");
+    //Heltec.display->drawString(20, 22, "              ");
     Heltec.display->drawString(20, 22, String(iaqSensor.temperature) );
-    Heltec.display->drawString(60, 22, String(iaqSensor.breathVocEquivalent) );
-
+    Heltec.display->drawString(60, 22, String(iaqSensor.pressure/1e2) );
+    Heltec.display->drawString(100, 22, String(iaqSensor.humidity) );
+    
+    Heltec.display->drawString(20, 44, String(iaqSensor.breathVocEquivalent) );
+    Heltec.display->drawString(60, 44, String(iaqSensor.iaq) );
+    Heltec.display->drawString(100, 44, String(iaqSensor.iaqAccuracy) );
+    
     Heltec.display->display();
-
-
-  } else {
-    checkIaqSensorStatus();
-  }
+    //errLeds();
 }
 
-void read_bme680(void)
-{
-  unsigned long time_trigger = millis();
-  if (iaqSensor.run()) { // If new data is available
-    output = String(time_trigger);
-    output += ", " + String(iaqSensor.rawTemperature);
-    output += ", " + String(iaqSensor.pressure);
-    output += ", " + String(iaqSensor.rawHumidity);
-    output += ", " + String(iaqSensor.gasResistance);
-    output += ", " + String(iaqSensor.iaq);
-    output += ", " + String(iaqSensor.iaqAccuracy);
-    output += ", " + String(iaqSensor.temperature);
-    output += ", " + String(iaqSensor.humidity);
-    output += ", " + String(iaqSensor.staticIaq);
-    output += ", " + String(iaqSensor.co2Equivalent);
-    output += ", " + String(iaqSensor.breathVocEquivalent);
-    Serial.println(output);
-    Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
-    Heltec.display->drawString(64, 44, String(iaqSensor.temperature) + 'o');
-    // write the buffer to the display
-    Heltec.display->display();
-    errLeds();
-
-  } else {
-    checkIaqSensorStatus();
-  }
-}
 
 // Helper function definitions
 void checkIaqSensorStatus(void)
 {
   if (iaqSensor.status != BSEC_OK) {
     if (iaqSensor.status < BSEC_OK) {
-      output = "BSEC error code : " + String(iaqSensor.status);
+      output = "0, BSEC error code : " + String(iaqSensor.status);
       Serial.println(output);
-  //    for (;;)
-  //      errLeds(); /* Halt in case of failure */
+      for (;;)
+        errLeds(); /* Halt in case of failure */
     } else {
-      output = "BSEC warning code : " + String(iaqSensor.status);
+      output = "0, BSEC warning code : " + String(iaqSensor.status);
       Serial.println(output);
     }
   }
 
   if (iaqSensor.bme680Status != BME680_OK) {
     if (iaqSensor.bme680Status < BME680_OK) {
-      output = "BME680 error code : " + String(iaqSensor.bme680Status);
+      output = "0, BME680 error code : " + String(iaqSensor.bme680Status);
       Serial.println(output);
- //     for (;;)
- //       errLeds(); /* Halt in case of failure */
+      for (;;)
+        errLeds(); /* Halt in case of failure */
     } else {
-      output = "BME680 warning code : " + String(iaqSensor.bme680Status);
+      output = "0, BME680 warning code : " + String(iaqSensor.bme680Status);
       Serial.println(output);
     }
   }
@@ -274,4 +297,62 @@ void errLeds(void)
   delay(100);
   digitalWrite(LED_BUILTIN, LOW);
   delay(100);
+}
+
+
+void loadState(void)
+{
+  if (EEPROM.read(0) == BSEC_MAX_STATE_BLOB_SIZE) {
+    // Existing state in EEPROM
+    Serial.println("0, Reading state from EEPROM");
+
+    for (uint8_t i = 0; i < BSEC_MAX_STATE_BLOB_SIZE; i++) {
+      bsecState[i] = EEPROM.read(i + 1);
+      //Serial.println(bsecState[i], HEX);
+    }
+
+    iaqSensor.setState(bsecState);
+    checkIaqSensorStatus();
+  } else {
+    // Erase the EEPROM with zeroes
+    Serial.println("0, Erasing EEPROM");
+
+    for (uint8_t i = 0; i < BSEC_MAX_STATE_BLOB_SIZE + 1; i++)
+      EEPROM.write(i, 0);
+
+    EEPROM.commit();
+  }
+}
+
+void updateState(void)
+{
+  bool update = false;
+  /* Set a trigger to save the state. Here, the state is saved every STATE_SAVE_PERIOD with the first state being saved once the algorithm achieves full calibration, i.e. iaqAccuracy = 3 */
+  if (stateUpdateCounter == 0) {
+    if (iaqSensor.iaqAccuracy >= 3) {
+      update = true;
+      stateUpdateCounter++;
+    }
+  } else {
+    /* Update every STATE_SAVE_PERIOD milliseconds */
+    if ((stateUpdateCounter * STATE_SAVE_PERIOD) < millis()) {
+      update = true;
+      stateUpdateCounter++;
+    }
+  }
+
+  if (update) {
+    iaqSensor.getState(bsecState);
+    checkIaqSensorStatus();
+
+    Serial.println("0, Writing state to EEPROM");
+
+    for (uint8_t i = 0; i < BSEC_MAX_STATE_BLOB_SIZE ; i++) {
+      EEPROM.write(i + 1, bsecState[i]);
+      //Serial.println(bsecState[i], HEX);
+    }
+
+    EEPROM.write(0, BSEC_MAX_STATE_BLOB_SIZE);
+    EEPROM.commit();
+  }
 }
