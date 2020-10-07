@@ -21,6 +21,8 @@ hum = []
 cO2 = []
 voc = []
 
+staticIaq = []
+
 
 with open('bme680_data.csv','r') as csvfile:
     data = csv.reader(csvfile, delimiter=',')
@@ -32,8 +34,8 @@ with open('bme680_data.csv','r') as csvfile:
         iaqAcq.append(int(row[5]))
         tmp.append(float(row[6]))
         hum.append(float(row[7]))
-        cO2.append(float(row[8]))
-        voc.append(float(row[9]))
+        cO2.append(float(row[9]))
+        voc.append(float(row[10]))
 
 fig, axs = plt.subplots(2, 2, sharex=True)
 

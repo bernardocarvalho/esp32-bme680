@@ -12,7 +12,7 @@ How to build PlatformIO based project
     > clone https://github.com/bernardocarvalho/esp32-bme680 
 
     # Change directory to example
-    > cd devkit
+    > cd esp32-bme680/devkit
 
     # Build project
     > platformio run

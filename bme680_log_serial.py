@@ -41,7 +41,7 @@ while True:
                 output += ", " + String(iaqSensor.iaq);
                 output += ", " + String(iaqSensor.iaqAccuracy);
                 output += ", " + String(iaqSensor.temperature);
-                output += ", " + String(iaqSensor.    );
+                output += ", " + String(iaqSensor.humidity);
                 output += ", " + String(iaqSensor.staticIaq);
                 output += ", " + String(iaqSensor.co2Equivalent);
                 output += ", " + String(iaqSensor.breathVocEquivalent);
@@ -53,13 +53,14 @@ while True:
             iaqAccuracy =int(dataList[7])
             temperature =float(dataList[8])
             humidity =float(dataList[9])
+            staticIaq =float(dataList[10])
             co2Equivalent =float(dataList[11])
             breathVocEquivalent =float(dataList[12])
             #print(time.time() + ',' + line)
             with open("bme680_data.csv","a") as f:
                 #f.write(line_sv + '\r\n')
                 writer = csv.writer(f,delimiter=",")
-                writer.writerow([int(time.time()),uCtime,pressure,gasResistance,iaq,iaqAccuracy,temperature,humidity,co2Equivalent,breathVocEquivalent])
+                writer.writerow([int(time.time()),uCtime,pressure,gasResistance,iaq,iaqAccuracy,temperature,humidity,staticIaq, co2Equivalent,breathVocEquivalent])
     except (KeyboardInterrupt, SystemExit):
         print("Keyboard Interrupt")
         break
