@@ -32,22 +32,21 @@
 const char* ssid     = "Vodafone-05C121";
 const char* password = "dpsjKk34U2";
 
-
 #define BME680_I2C_ADDR 0x77
 
 /* Configure the BSEC library with information about the sensor
-    18v/33v = Voltage at Vdd. 1.8V or 3.3V
-    3s/300s = BSEC operating mode, BSEC_SAMPLE_RATE_LP or BSEC_SAMPLE_RATE_ULP
-    4d/28d = Operating age of the sensor in days
-    generic_18v_3s_4d
-    generic_18v_3s_28d
-    generic_18v_300s_4d
-    generic_18v_300s_28d
-    generic_33v_3s_4d
-    generic_33v_3s_28d
-    generic_33v_300s_4d
-    generic_33v_300s_28d
-*/
+   18v/33v = Voltage at Vdd. 1.8V or 3.3V
+   3s/300s = BSEC operating mode, BSEC_SAMPLE_RATE_LP or BSEC_SAMPLE_RATE_ULP
+   4d/28d = Operating age of the sensor in days
+   generic_18v_3s_4d
+   generic_18v_3s_28d
+   generic_18v_300s_4d
+   generic_18v_300s_28d
+   generic_33v_3s_4d
+   generic_33v_3s_28d
+   generic_33v_300s_4d
+   generic_33v_300s_28d
+   */
 const uint8_t bsec_config_iaq[] = {
 #include "config/generic_33v_3s_4d/bsec_iaq.txt"
 };
@@ -69,9 +68,7 @@ String output;
 
 void connect_wifi()
 {
-
-    // We start by connecting to a WiFi network
-
+    // connecting to a WiFi network
     Serial.println();
     Serial.println();
     Serial.print("Connecting to ");
@@ -94,134 +91,132 @@ void connect_wifi()
 
 void scan_I2C()
 {
-  byte error, address;
-  int nDevices;
+    byte error, address;
+    int nDevices;
 
-  Serial.println("Scanning...");
+    Serial.println("Scanning...");
 
-  nDevices = 0;
-  for(address = 1; address < 127; address++ )
-  {
-    Wire.beginTransmission(address);
-    error = Wire.endTransmission();
-
-//    Wire1.beginTransmission(address);
-//    error = Wire1.endTransmission();
-
-    if (error == 0)
+    nDevices = 0;
+    for(address = 1; address < 127; address++ )
     {
-      Serial.print("I2C device found at address 0x");
-      if (address<16)
-      Serial.print("0");
-      Serial.print(address,HEX);
-      Serial.println("  !");
+        Wire.beginTransmission(address);
+        error = Wire.endTransmission();
 
-      nDevices++;
+        //    Wire1.beginTransmission(address);
+        //    error = Wire1.endTransmission();
+
+        if (error == 0)
+        {
+            Serial.print("I2C device found at address 0x");
+            if (address<16)
+                Serial.print("0");
+            Serial.print(address,HEX);
+            Serial.println("  !");
+
+            nDevices++;
+        }
+        else if (error==4)
+        {
+            Serial.print("Unknown error at address 0x");
+            if (address<16)
+                Serial.print("0");
+            Serial.println(address,HEX);
+        }
     }
-    else if (error==4)
-    {
-      Serial.print("Unknown error at address 0x");
-      if (address<16)
-        Serial.print("0");
-      Serial.println(address,HEX);
-    }
-  }
-  if (nDevices == 0)
-  Serial.println("No I2C devices found\n");
-  else
-  Serial.println("done\n");
+    if (nDevices == 0)
+        Serial.println("No I2C devices found\n");
+    else
+        Serial.println("done\n");
 
 }
 
 void setup()
 {
-  Heltec.begin(true /*DisplayEnable Enable*/, false /*LoRa Disable*/, true /*Serial Enable*/);
-	Wire.begin(SDA_OLED, SCL_OLED); //Scan OLED's I2C address via I2C0
-	//Wire1.begin(SDA, SCL);        //If there have other device on I2C1, scan the device address via I2C1
+    Heltec.begin(true /*DisplayEnable Enable*/, false /*LoRa Disable*/, true /*Serial Enable*/);
+    Wire.begin(SDA_OLED, SCL_OLED); //Scan OLED's I2C address via I2C0
+    //Wire1.begin(SDA, SCL);        //If there have other device on I2C1, scan the device address via I2C1
 
-  EEPROM.begin(BSEC_MAX_STATE_BLOB_SIZE + 1); // 1st address for the length
-  Serial.begin(115200); //Not needed
-  while(!Serial);    // time to get serial running
+    EEPROM.begin(BSEC_MAX_STATE_BLOB_SIZE + 1); // 1st address for the length
+    Serial.begin(115200); //Not needed
+    while(!Serial);    // time to get serial running
     delay(5000);
-  //Serial.println(F("0, BME680 test Init"));
+    //Serial.println(F("0, BME680 test Init"));
 
-  iaqSensor.begin(BME680_I2C_ADDR, Wire);
-  output = "0, BSEC library version " + String(iaqSensor.version.major) + "." + String(iaqSensor.version.minor) + "." + String(iaqSensor.version.major_bugfix) + "." + String(iaqSensor.version.minor_bugfix);
-  Serial.println(output);
-  checkIaqSensorStatus();
+    iaqSensor.begin(BME680_I2C_ADDR, Wire);
+    output = "0, BSEC library version " + String(iaqSensor.version.major) + "." + String(iaqSensor.version.minor) + "." + String(iaqSensor.version.major_bugfix) + "." + String(iaqSensor.version.minor_bugfix);
+    Serial.println(output);
+    checkIaqSensorStatus();
 
-  iaqSensor.setConfig(bsec_config_iaq);
-  checkIaqSensorStatus();
+    iaqSensor.setConfig(bsec_config_iaq);
+    checkIaqSensorStatus();
 
-  loadState();
+    loadState();
 
-  Serial.println("0, BME680 0x77 OK");
+    Serial.println("0, BME680 0x77 OK");
 
-  bsec_virtual_sensor_t sensorList[10] = {
-    BSEC_OUTPUT_RAW_TEMPERATURE,
-    BSEC_OUTPUT_RAW_PRESSURE,
-    BSEC_OUTPUT_RAW_HUMIDITY,
-    BSEC_OUTPUT_RAW_GAS,
-    BSEC_OUTPUT_IAQ,
-    BSEC_OUTPUT_STATIC_IAQ,
-    BSEC_OUTPUT_CO2_EQUIVALENT,
-    BSEC_OUTPUT_BREATH_VOC_EQUIVALENT,
-    BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_TEMPERATURE,
-    BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_HUMIDITY,
-  };
+    bsec_virtual_sensor_t sensorList[10] = {
+        BSEC_OUTPUT_RAW_TEMPERATURE,
+        BSEC_OUTPUT_RAW_PRESSURE,
+        BSEC_OUTPUT_RAW_HUMIDITY,
+        BSEC_OUTPUT_RAW_GAS,
+        BSEC_OUTPUT_IAQ,
+        BSEC_OUTPUT_STATIC_IAQ,
+        BSEC_OUTPUT_CO2_EQUIVALENT,
+        BSEC_OUTPUT_BREATH_VOC_EQUIVALENT,
+        BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_TEMPERATURE,
+        BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_HUMIDITY,
+    };
 
-  iaqSensor.updateSubscription(sensorList, 10, BSEC_SAMPLE_RATE_LP);
-  checkIaqSensorStatus();
+    iaqSensor.updateSubscription(sensorList, 10, BSEC_SAMPLE_RATE_LP);
+    checkIaqSensorStatus();
 
-  Heltec.display->flipScreenVertically();
-  Heltec.display->setFont(ArialMT_Plain_10);
-// clear the display
-  Heltec.display->clear();
+    Heltec.display->flipScreenVertically();
+    Heltec.display->setFont(ArialMT_Plain_10);
+    // clear the display
+    Heltec.display->clear();
 
-  Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);
-  Heltec.display->drawString(0, 0, "Starting BME ");
+    Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);
+    Heltec.display->drawString(0, 0, "Starting BME ");
 
-  //Heltec.display->drawString(10, 128, String(millis()));
-  // write the buffer to the display
+    //Heltec.display->drawString(10, 128, String(millis()));
+    // write the buffer to the display
     Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
-  Heltec.display->drawString(0, 11, "Temp   P (mBar)  Hum %");
+    Heltec.display->drawString(0, 11, "Temp   P (mBar)  Hum %");
 
-  //Heltec.display->drawString(0, 9, "Temp VOC IAQ");
+    //Heltec.display->drawString(0, 9, "Temp VOC IAQ");
 
-  // The coordinates define the center of the text
-  //Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
-  //Heltec.display->drawString(64, 22, "Center aligned (64,22)");
+    // The coordinates define the center of the text
+    //Heltec.display->setTextAlignment(TEXT_ALIGN_CENTER);
+    //Heltec.display->drawString(64, 22, "Center aligned (64,22)");
 
-  // The coordinates define the right end of the text
-  //Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);
-  //Heltec.display->drawString(128, 33, "Right aligned (128,33)");
+    // The coordinates define the right end of the text
+    //Heltec.display->setTextAlignment(TEXT_ALIGN_RIGHT);
+    //Heltec.display->drawString(128, 33, "Right aligned (128,33)");
 
-  Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
-  Heltec.display->drawString(0, 33, "VOC      Iac      Iacq");
+    Heltec.display->setTextAlignment(TEXT_ALIGN_LEFT);
+    Heltec.display->drawString(0, 33, "VOC      Iac      Iacq");
 
-
-  Heltec.display->display();
-  errLeds();
-  //connect_wifi();
-
+    Heltec.display->display();
+    errLeds();
+    //connect_wifi();
 }
 
 
 void loop(void)
 {
-  unsigned long time_trigger = millis();
-  if (iaqSensor.run()) { // If new data is available
-    print_bme680(time_trigger);
-    updateState();
-  } else {
-    checkIaqSensorStatus();
-  }
+    unsigned long time_trigger = millis();
+    if (iaqSensor.run()) { // If new data is available
+        print_bme680(time_trigger);
+        updateState();
+    } else {
+        checkIaqSensorStatus();
+    }
 }
 
 void loop2()
 {
-  //scan_I2C();
-  void read_bme680(void);
+    //scan_I2C();
+    void read_bme680(void);
 }
 
 void print_bme680(unsigned long time){
@@ -239,7 +234,7 @@ void print_bme680(unsigned long time){
     output += ", " + String(iaqSensor.breathVocEquivalent);
     Serial.println(output);
 
-   //   Heltec.display->clear();
+    //   Heltec.display->clear();
     Heltec.display->setColor(BLACK);
     Heltec.display->fillRect(10, 22, 140, 10);
     //Heltec.display->fillRect(60, 22, 40, 10);
@@ -251,11 +246,11 @@ void print_bme680(unsigned long time){
     Heltec.display->drawString(20, 22, String(iaqSensor.temperature) );
     Heltec.display->drawString(60, 22, String(iaqSensor.pressure/1e2) );
     Heltec.display->drawString(100, 22, String(iaqSensor.humidity) );
-    
+
     Heltec.display->drawString(20, 44, String(iaqSensor.breathVocEquivalent) );
     Heltec.display->drawString(60, 44, String(iaqSensor.iaq) );
     Heltec.display->drawString(100, 44, String(iaqSensor.iaqAccuracy) );
-    
+
     Heltec.display->display();
     //errLeds();
 }
@@ -264,95 +259,95 @@ void print_bme680(unsigned long time){
 // Helper function definitions
 void checkIaqSensorStatus(void)
 {
-  if (iaqSensor.status != BSEC_OK) {
-    if (iaqSensor.status < BSEC_OK) {
-      output = "0, BSEC error code : " + String(iaqSensor.status);
-      Serial.println(output);
-      for (;;)
-        errLeds(); /* Halt in case of failure */
-    } else {
-      output = "0, BSEC warning code : " + String(iaqSensor.status);
-      Serial.println(output);
+    if (iaqSensor.status != BSEC_OK) {
+        if (iaqSensor.status < BSEC_OK) {
+            output = "0, BSEC error code : " + String(iaqSensor.status);
+            Serial.println(output);
+            for (;;)
+                errLeds(); /* Halt in case of failure */
+        } else {
+            output = "0, BSEC warning code : " + String(iaqSensor.status);
+            Serial.println(output);
+        }
     }
-  }
 
-  if (iaqSensor.bme680Status != BME680_OK) {
-    if (iaqSensor.bme680Status < BME680_OK) {
-      output = "0, BME680 error code : " + String(iaqSensor.bme680Status);
-      Serial.println(output);
-      for (;;)
-        errLeds(); /* Halt in case of failure */
-    } else {
-      output = "0, BME680 warning code : " + String(iaqSensor.bme680Status);
-      Serial.println(output);
+    if (iaqSensor.bme680Status != BME680_OK) {
+        if (iaqSensor.bme680Status < BME680_OK) {
+            output = "0, BME680 error code : " + String(iaqSensor.bme680Status);
+            Serial.println(output);
+            for (;;)
+                errLeds(); /* Halt in case of failure */
+        } else {
+            output = "0, BME680 warning code : " + String(iaqSensor.bme680Status);
+            Serial.println(output);
+        }
     }
-  }
 
 }
 
 void errLeds(void)
 {
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, HIGH);
-  delay(100);
-  digitalWrite(LED_BUILTIN, LOW);
-  delay(100);
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(100);
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(100);
 }
 
 
 void loadState(void)
 {
-  if (EEPROM.read(0) == BSEC_MAX_STATE_BLOB_SIZE) {
-    // Existing state in EEPROM
-    Serial.println("0, Reading state from EEPROM");
+    if (EEPROM.read(0) == BSEC_MAX_STATE_BLOB_SIZE) {
+        // Existing state in EEPROM
+        Serial.println("0, Reading state from EEPROM");
 
-    for (uint8_t i = 0; i < BSEC_MAX_STATE_BLOB_SIZE; i++) {
-      bsecState[i] = EEPROM.read(i + 1);
-      //Serial.println(bsecState[i], HEX);
+        for (uint8_t i = 0; i < BSEC_MAX_STATE_BLOB_SIZE; i++) {
+            bsecState[i] = EEPROM.read(i + 1);
+            //Serial.println(bsecState[i], HEX);
+        }
+
+        iaqSensor.setState(bsecState);
+        checkIaqSensorStatus();
+    } else {
+        // Erase the EEPROM with zeroes
+        Serial.println("0, Erasing EEPROM");
+
+        for (uint8_t i = 0; i < BSEC_MAX_STATE_BLOB_SIZE + 1; i++)
+            EEPROM.write(i, 0);
+
+        EEPROM.commit();
     }
-
-    iaqSensor.setState(bsecState);
-    checkIaqSensorStatus();
-  } else {
-    // Erase the EEPROM with zeroes
-    Serial.println("0, Erasing EEPROM");
-
-    for (uint8_t i = 0; i < BSEC_MAX_STATE_BLOB_SIZE + 1; i++)
-      EEPROM.write(i, 0);
-
-    EEPROM.commit();
-  }
 }
 
 void updateState(void)
 {
-  bool update = false;
-  /* Set a trigger to save the state. Here, the state is saved every STATE_SAVE_PERIOD with the first state being saved once the algorithm achieves full calibration, i.e. iaqAccuracy = 3 */
-  if (stateUpdateCounter == 0) {
-    if (iaqSensor.iaqAccuracy >= 3) {
-      update = true;
-      stateUpdateCounter++;
-    }
-  } else {
-    /* Update every STATE_SAVE_PERIOD milliseconds */
-    if ((stateUpdateCounter * STATE_SAVE_PERIOD) < millis()) {
-      update = true;
-      stateUpdateCounter++;
-    }
-  }
-
-  if (update) {
-    iaqSensor.getState(bsecState);
-    checkIaqSensorStatus();
-
-    Serial.println("0, Writing state to EEPROM");
-
-    for (uint8_t i = 0; i < BSEC_MAX_STATE_BLOB_SIZE ; i++) {
-      EEPROM.write(i + 1, bsecState[i]);
-      //Serial.println(bsecState[i], HEX);
+    bool update = false;
+    /* Set a trigger to save the state. Here, the state is saved every STATE_SAVE_PERIOD with the first state being saved once the algorithm achieves full calibration, i.e. iaqAccuracy = 3 */
+    if (stateUpdateCounter == 0) {
+        if (iaqSensor.iaqAccuracy >= 3) {
+            update = true;
+            stateUpdateCounter++;
+        }
+    } else {
+        /* Update every STATE_SAVE_PERIOD milliseconds */
+        if ((stateUpdateCounter * STATE_SAVE_PERIOD) < millis()) {
+            update = true;
+            stateUpdateCounter++;
+        }
     }
 
-    EEPROM.write(0, BSEC_MAX_STATE_BLOB_SIZE);
-    EEPROM.commit();
-  }
+    if (update) {
+        iaqSensor.getState(bsecState);
+        checkIaqSensorStatus();
+
+        Serial.println("0, Writing state to EEPROM");
+
+        for (uint8_t i = 0; i < BSEC_MAX_STATE_BLOB_SIZE ; i++) {
+            EEPROM.write(i + 1, bsecState[i]);
+            //Serial.println(bsecState[i], HEX);
+        }
+
+        EEPROM.write(0, BSEC_MAX_STATE_BLOB_SIZE);
+        EEPROM.commit();
+    }
 }

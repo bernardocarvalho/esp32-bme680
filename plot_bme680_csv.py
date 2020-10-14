@@ -9,6 +9,7 @@ Created on Sun Oct  4 16:27:43 2020
 import matplotlib.pyplot as plt
 import numpy as np
 import csv
+import sys
 from datetime import datetime, timezone
 
 ts = []
@@ -23,8 +24,12 @@ voc = []
 
 staticIaq = []
 
+if len(sys.argv) > 1:
+    filename = str(sys.argv[1])
+else:
+    filename = 'bme680_data.csv'
 
-with open('bme680_data.csv','r') as csvfile:
+with open(filename, 'r') as csvfile:
     data = csv.reader(csvfile, delimiter=',')
     for row in data:
         ts.append(datetime.fromtimestamp(int(row[0]), timezone.utc))
@@ -40,9 +45,9 @@ with open('bme680_data.csv','r') as csvfile:
 fig, axs = plt.subplots(2, 2, sharex=True)
 
 color = 'tab:red'
-line1, = axs[0,0].plot(ts,p, color=color)
+line1, = axs[0, 0].plot(ts,p, color=color)
 
-axs[0,0].set_ylabel('Pressure Pa')
+axs[0, 0].set_ylabel('Pressure Pa')
 
 axs[0,0].set_title("BME680 data")
 axs[0,0].set_ylim(1.0e5, 1.03e5)
@@ -79,7 +84,6 @@ ax4 = axs[0,1].twinx()  # instantiate a second axes that shares the same x-axis
 ax4.set_ylabel('gasResistance ', color=color)  # we already handled the x-label with ax1
 ax4.plot(ts, gRes, color=color)
 
-
 color = 'tab:red'
 axs[1,1].set_ylabel('VOC')
 #axs[1,1].set_xlabel('Time (s)')
@@ -91,6 +95,5 @@ ax5 = axs[1,1].twinx()  # instantiate a second axes that shares the same x-axis
 ax5.set_ylabel('CO_2 ', color=color)  # we already handled the x-label with ax1
 ax5.plot(ts, cO2, color=color)
 ax5.set_xlabel('Time (s)')
-
 
 plt.show()
