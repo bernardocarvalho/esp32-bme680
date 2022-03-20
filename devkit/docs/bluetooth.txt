@@ -1,0 +1,28 @@
+https://pypi.org/project/ble-serial/
+
+sudo vim /etc/bluetooth/rfcomm.conf
+Add the connection details:
+
+
+rfcomm1 {
+    # Automatically bind the device at startup
+    bind yes;
+
+   # Bluetooth address of the device
+    device xx:xx:xx:xx:xx:xx;
+
+    # RFCOMM channel for the connection
+    channel 1;
+
+    # Description of the connection
+    comment "My Bluetooth Connection";
+}
+
+sudo bluetoothctl -a
+	scan on 
+	pair xxx
+	connect xxx
+	trust xxx
+ bluetoothctl paired-devices
+sudo rfcomm bind /dev/rfcomm0 30:AE:A4:37:A0:9E 1
+
