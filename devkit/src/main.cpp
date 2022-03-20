@@ -1,5 +1,11 @@
+#include <Arduino.h>
 #include <EEPROM.h>
+//#include <bme680.h>
 #include "bsec.h"
+#include "BluetoothSerial.h"
+
+BluetoothSerial SerialBT;
+
 /* Configure the BSEC library with information about the sensor
     18v/33v = Voltage at Vdd. 1.8V or 3.3V
     3s/300s = BSEC operating mode, BSEC_SAMPLE_RATE_LP or BSEC_SAMPLE_RATE_ULP
@@ -17,7 +23,8 @@ const uint8_t bsec_config_iaq[] = {
 #include "config/generic_33v_3s_4d/bsec_iaq.txt"
 };
 
-#define STATE_SAVE_PERIOD	UINT32_C(360 * 60 * 1000) // 360 minutes - 4 times a day
+//#define STATE_SAVE_PERIOD	UINT32_C(360 * 60 * 1000) // 360 minutes - 4 times a day
+#define STATE_SAVE_PERIOD	UINT32_C(3 * 60 * 1000) // 360 minutes - 4 times a day
 
 // Helper functions declarations
 void checkIaqSensorStatus(void);
@@ -37,6 +44,8 @@ void setup(void)
 {
   EEPROM.begin(BSEC_MAX_STATE_BLOB_SIZE + 1); // 1st address for the length
   Serial.begin(115200);
+  SerialBT.begin("ESP32test"); //Bluetooth device name
+
   Wire.begin();
 
   iaqSensor.begin(BME680_I2C_ADDR_PRIMARY, Wire);
@@ -69,25 +78,52 @@ void setup(void)
   checkIaqSensorStatus();
 
   // Print the header
-  output = "Timestamp [ms], raw temperature [°C], pressure [hPa], raw relative humidity [%], gas [Ohm], IAQ, IAQ accuracy, temperature [°C], relative humidity [%]";
-  Serial.println(output);
+  //output = "Timestamp [ms], raw temperature [°C], pressure [hPa], raw relative humidity [%], gas [Ohm], IAQ, IAQ accuracy, temperature [°C], relative humidity [%]";
+  //Serial.println(output);
 }
+void print_bme680(unsigned long time){
+/* Message format all floats, except pressure, iaq (uint_8)
+ time, temperature, pressure, humidity, co2Equivalent, iaq, iaqAccuracy, staticIaq, rawTemperature 
+             rawHumidity,  rawHumidity */
+    output = "1 " + String(time,DEC);
+    output += ", " + String(iaqSensor.temperature, 1);
+    output += ", " + String(iaqSensor.pressure,0);
+    output += ", " + String(iaqSensor.humidity,1);
+    output += ", " + String(iaqSensor.co2Equivalent,3);
+    output += ", " + String(iaqSensor.breathVocEquivalent,3);
+    output += ", " + String(iaqSensor.iaq); //, DEC)
+    output += ", " + String(iaqSensor.iaqAccuracy);
+    output += ", " + String(iaqSensor.staticIaq);
+    output += ", " + String(iaqSensor.rawTemperature);
+    output += ", " + String(iaqSensor.rawHumidity);
+    output += ", " + String(iaqSensor.rawHumidity);
+    Serial.println(output);
+    SerialBT.println(output);
 
+}
 // Function that is looped forever
 void loop(void)
 {
   unsigned long time_trigger = millis();
   if (iaqSensor.run()) { // If new data is available
+    //print_bme680(time_trigger);
+
     output = String(time_trigger);
-    output += ", " + String(iaqSensor.rawTemperature);
+    output += ", " + String(iaqSensor.temperature);
+    output += ", " + String(iaqSensor.humidity);
     output += ", " + String(iaqSensor.pressure);
-    output += ", " + String(iaqSensor.rawHumidity);
+
     output += ", " + String(iaqSensor.gasResistance);
     output += ", " + String(iaqSensor.iaq);
     output += ", " + String(iaqSensor.iaqAccuracy);
-    output += ", " + String(iaqSensor.temperature);
-    output += ", " + String(iaqSensor.humidity);
+    output += ", " + String(iaqSensor.rawTemperature);
+    output += ", " + String(iaqSensor.rawHumidity);
     Serial.println(output);
+    SerialBT.println(output);
+
+      Serial.print("iaq= ");
+      Serial.println(iaqSensor.iaq);
+
     updateState();
   } else {
     checkIaqSensorStatus();

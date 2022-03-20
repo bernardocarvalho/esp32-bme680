@@ -52,6 +52,8 @@ const uint8_t bsec_config_iaq[] = {
 };
 #define STATE_SAVE_PERIOD	UINT32_C(360 * 60 * 1000) // 360 minutes - 4 times a day
 
+#define STATE_SAVE_PERIOD	UINT32_C( 1000) // 360 minutes - 4 times a day
+
 // Helper functions declarations
 void checkIaqSensorStatus(void);
 void errLeds(void);
