@@ -121,8 +121,8 @@ void loop(void)
     Serial.println(output);
     SerialBT.println(output);
 
-      Serial.print("iaq= ");
-      Serial.println(iaqSensor.iaq);
+      //Serial.print("iaq= ");
+      //Serial.println(iaqSensor.iaq);
 
     updateState();
   } else {
