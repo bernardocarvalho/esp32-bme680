@@ -12,6 +12,57 @@
 #include "bsec.h"
 #include "BluetoothSerial.h"
 
+#if !defined( ESP32 )
+  #error This code is designed to run on ESP32 platform, not Arduino nor ESP8266! Please check your Tools->Board setting.
+#endif
+
+// These define's must be placed at the beginning before #include "ESP32_PWM.h"
+// _PWM_LOGLEVEL_ from 0 to 4
+// Don't define _PWM_LOGLEVEL_ > 0. Only for special ISR debugging only. Can hang the system.
+#define _PWM_LOGLEVEL_                3
+
+//#define USING_MICROS_RESOLUTION       true    //false
+
+// Default is true, uncomment to false
+//#define CHANGING_PWM_END_OF_CYCLE     false
+
+// To be included only in main(), .ino with setup() to avoid `Multiple Definitions` Linker Error
+// https://registry.platformio.org/libraries/khoih-prog/ESP32_PWM/examples/ISR_Changing_PWM/ISR_Changing_PWM.ino
+// https://registry.platformio.org/libraries/khoih-prog/TimerInterrupt_Generic
+#include "ESP32_PWM.h"
+
+#define HW_TIMER_INTERVAL_US      20L
+volatile uint32_t startMicros = 0;
+
+// Init ESP32 timer 1
+ESP32Timer ITimer(1);
+
+// Init ESP32_ISR_PWM
+ESP32_PWM ISR_PWM;
+
+bool IRAM_ATTR TimerHandler(void * timerNo)
+{
+  ISR_PWM.run();
+
+  return true;
+}
+
+//////////////////////////////////////////////////////
+
+#define USING_PWM_FREQUENCY     true
+// You can assign pins here. Be carefull to select good pin to use or crash
+uint32_t PWM_Pin    = 23;
+
+// You can assign any interval for any timer here, in Hz
+float PWM_Freq1   = 100.0f;
+// You can assign any interval for any timer here, in microseconds
+uint32_t PWM_Period1 = 1000000 / PWM_Freq1;
+// You can assign any duty_cycle for any PWM here, from 0-100
+float PWM_DutyCycle1  = 50.0;
+
+// Channel number used to identify associated channel
+int channelNum;
+
 //BluetoothSerial SerialBT;
 
 /* Configure the BSEC library with information about the sensor
@@ -39,6 +90,7 @@ const uint8_t bsec_config_iaq[] = {
 #ifndef SECRET_SSID
 #include "arduino_secrets.h"
 #endif
+
 
 const char *ssid = SECRET_SSID;
 const char *password = SECRET_PASS;
@@ -185,10 +237,29 @@ void setup(void)
 
     Wire.begin();
 
-    iaqSensor.begin(BME680_I2C_ADDR_PRIMARY, Wire);
+//    iaqSensor.begin(BME680_I2C_ADDR_PRIMARY, Wire);
+    iaqSensor.begin(BME68X_I2C_ADDR_LOW, Wire);
     output = "\nBSEC library version " + String(iaqSensor.version.major) + "." + String(iaqSensor.version.minor) + "." + String(iaqSensor.version.major_bugfix) + "." + String(iaqSensor.version.minor_bugfix);
     Serial.println(output);
     checkIaqSensorStatus();
+    
+    Serial.print(F("\nStarting ISR_Changing_PWM on ")); Serial.println(ARDUINO_BOARD);
+    Serial.println(ESP32_PWM_VERSION);
+    Serial.print(F("CPU Frequency = ")); Serial.print(F_CPU / 1000000); Serial.println(F(" MHz"));
+    // Interval in microsecs
+    if (ITimer.attachInterruptInterval(HW_TIMER_INTERVAL_US, TimerHandler))
+    {
+        startMicros = micros();
+        Serial.print(F("Starting ITimer OK, micros() = ")); Serial.println(startMicros);
+    }
+    else
+        Serial.println(F("Can't set ITimer. Select another freq. or timer"));
+
+    Serial.print(F("Using PWM Freq = ")); Serial.print(PWM_Freq1); Serial.print(F(", PWM DutyCycle = ")); Serial.println(PWM_DutyCycle1);
+  // You can use this with PWM_Freq in Hz
+    channelNum = ISR_PWM.setPWM(PWM_Pin, PWM_Freq1, PWM_DutyCycle1);
+    // ISR_PWM.deleteChannel((uint8_t) channelNum); // To change do this first
+
 
     iaqSensor.setConfig(bsec_config_iaq);
     checkIaqSensorStatus();
@@ -232,13 +303,25 @@ void setup(void)
 
 
     // Print the header
+    output = "Timestamp [ms], temperature [°C], rel humidity [%], pressure [hPa], gas [Ohm], IAQ, IAQ accuracy, raw temp[°C], raw hum [%],";
     //output = "Timestamp [ms], raw temperature [°C], pressure [hPa], raw relative humidity [%], gas [Ohm], IAQ, IAQ accuracy, temperature [°C], relative humidity [%]";
-    //Serial.println(output);
+    Serial.println(output);
 }
 void print_bme680(unsigned long time){
+    output = String(time);
+    output += ", " + String(iaqSensor.temperature);
+    output += ", " + String(iaqSensor.humidity);
+    output += ", " + String(iaqSensor.pressure);
+
+    output += ", " + String(iaqSensor.gasResistance);
+    output += ", " + String(iaqSensor.iaq);
+    output += ", " + String(iaqSensor.iaqAccuracy);
+    output += ", " + String(iaqSensor.rawTemperature);
+    output += ", " + String(iaqSensor.rawHumidity);
+    Serial.println(output);
     /* Message format all floats, except pressure, iaq (uint_8)
        time, temperature, pressure, humidity, co2Equivalent, iaq, iaqAccuracy, staticIaq, rawTemperature 
-       rawHumidity,  rawHumidity */
+       rawHumidity,  rawHumidity 
     output = "1 " + String(time,DEC);
     output += ", " + String(iaqSensor.temperature, 1);
     output += ", " + String(iaqSensor.pressure,0);
@@ -251,8 +334,8 @@ void print_bme680(unsigned long time){
     output += ", " + String(iaqSensor.rawTemperature);
     output += ", " + String(iaqSensor.rawHumidity);
     output += ", " + String(iaqSensor.rawHumidity);
-    Serial.println(output);
     //SerialBT.println(output);
+    */
 
 }
 // Function that is looped forever
@@ -284,19 +367,8 @@ void loop(void)
             Serial.println(asctime(&timeinfo));
         }
         if (iaqSensor.run()) { // If new data is available
-            //print_bme680(time_trigger);
+            print_bme680(time_trigger);
 
-            output = String(time_trigger);
-            output += ", " + String(iaqSensor.temperature);
-            output += ", " + String(iaqSensor.humidity);
-            output += ", " + String(iaqSensor.pressure);
-
-            output += ", " + String(iaqSensor.gasResistance);
-            output += ", " + String(iaqSensor.iaq);
-            output += ", " + String(iaqSensor.iaqAccuracy);
-            output += ", " + String(iaqSensor.rawTemperature);
-            output += ", " + String(iaqSensor.rawHumidity);
-            Serial.println(output);
             //SerialBT.println(output);
 
             //Serial.print("iaq= ");
@@ -322,26 +394,26 @@ void loop(void)
 // Helper function definitions
 void checkIaqSensorStatus(void)
 {
-    if (iaqSensor.status != BSEC_OK) {
-        if (iaqSensor.status < BSEC_OK) {
-            output = "BSEC error code : " + String(iaqSensor.status);
+    if (iaqSensor.bsecStatus != BSEC_OK) {
+        if (iaqSensor.bsecStatus < BSEC_OK) {
+            output = "BSEC error code : " + String(iaqSensor.bsecStatus);
             Serial.println(output);
             for (;;)
                 errLeds(); /* Halt in case of failure */
         } else {
-            output = "BSEC warning code : " + String(iaqSensor.status);
+            output = "BSEC warning code : " + String(iaqSensor.bsecStatus);
             Serial.println(output);
         }
     }
 
-    if (iaqSensor.bme680Status != BME680_OK) {
-        if (iaqSensor.bme680Status < BME680_OK) {
-            output = "BME680 error code : " + String(iaqSensor.bme680Status);
+    if (iaqSensor.bme68xStatus != BME68X_OK) {
+        if (iaqSensor.bme68xStatus < BME68X_OK) {
+            output = "BME680 error code : " + String(iaqSensor.bme68xStatus);
             Serial.println(output);
             for (;;)
                 errLeds(); /* Halt in case of failure */
         } else {
-            output = "BME680 warning code : " + String(iaqSensor.bme680Status);
+            output = "BME680 warning code : " + String(iaqSensor.bme68xStatus);
             Serial.println(output);
         }
     }
