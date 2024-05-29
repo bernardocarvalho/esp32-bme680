@@ -183,16 +183,11 @@ void mqttConnect(void)
 {
     char buff[20];
 
-    uint8_t status ;
-    if ( (WiFi.status() != WL_CONNECTED) || (WiFi.RSSI() == 0) )
-    {
-        OledClear(0, 0, 80, 10);
-        Serial.println(F("\nWiFi lost. Call connectMultiWiFi"));
-        status = connectMultiWiFi();
-    }
+    //uint8_t status ;
     Serial.println("Check  Wifi...");
     // if(wifiMulti.run() == WL_CONNECTED) {
-    if(status == WL_CONNECTED) {
+    if ( WiFi.status() == WL_CONNECTED) { 
+    //if(status == WL_CONNECTED) {
         OledClear(0, 0, 80, 10);
         IPAddress ip = WiFi.localIP();
         sprintf(buff, "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
@@ -223,53 +218,66 @@ void mqttConnect(void)
             delay(1000UL);
         }
 
+    }
+    else {
+        oled_display.drawString(0, 0, "No Wifi Connection");
+    }
+    oled_display.display();
+}
+
+void wifiConnect(void)
+{
+    char buff[20];
+
+    uint8_t status ;
+    if ( (WiFi.status() != WL_CONNECTED) || (WiFi.RSSI() == 0) )
+    {
+        OledClear(0, 0, 80, 10);
+        Serial.println(F("\nWiFi lost. Call connectMultiWiFi"));
+        status = connectMultiWiFi();
+    }
+    Serial.println("Check  Wifi...");
+    mqttConnect();
+}
+
+void WIFISetUp(void)
+{
+    char buff[20];
+    // Set WiFi to station mode and disconnect from an AP if it was previously connected
+    WiFi.disconnect(true);
+    delay(100);
+    //     Add list of wifi networks
+    wifiMulti.addAP(SECRET_SSID0,SECRET_PASS0);
+    wifiMulti.addAP("TP-Link_37E8","87936148");
+    WiFi.mode(WIFI_STA);
+    //WiFi.setAutoConnect(true);
+    delay(100);
+    // WiFi.scanNetworks will return the number of networks found
+    int n = WiFi.scanNetworks();
+    Serial.println("scan done");
+    if (n == 0) {
+        Serial.println("no networks found");
+        oled_display.drawString(0, 0, "No Wifi Connection");
+    } 
+    else {
+        oled_display.drawString(0, 0, "Connecting...");
+        oled_display.display();
+        Serial.print(n);
+        Serial.println(" networks found");
+        for (int i = 0; i < n; ++i) {
+            // Print SSID and RSSI for each network found
+            Serial.print(i + 1);
+            Serial.print(": ");
+            Serial.print(WiFi.SSID(i));
+            Serial.print(" (");
+            Serial.print(WiFi.RSSI(i));
+            Serial.print(")");
+            Serial.println((WiFi.encryptionType(i) == WIFI_AUTH_OPEN)?" ":"*");
+            delay(10);
         }
-            else {
-                oled_display.drawString(0, 0, "No Wifi Connection");
-            }
+    }
 
-            oled_display.display();
-        }
-
-        void WIFISetUp(void)
-        {
-            char buff[20];
-            // Set WiFi to station mode and disconnect from an AP if it was previously connected
-            WiFi.disconnect(true);
-            delay(100);
-            //     Add list of wifi networks
-            wifiMulti.addAP(SECRET_SSID0,SECRET_PASS0);
-            wifiMulti.addAP("TP-Link_37E8","87936148");
-            WiFi.mode(WIFI_STA);
-            //WiFi.setAutoConnect(true);
-            delay(100);
-            // WiFi.scanNetworks will return the number of networks found
-            int n = WiFi.scanNetworks();
-            Serial.println("scan done");
-            if (n == 0) {
-                Serial.println("no networks found");
-                oled_display.drawString(0, 0, "No Wifi Connection");
-            } 
-            else {
-                oled_display.drawString(0, 0, "Connecting...");
-                oled_display.display();
-                Serial.print(n);
-                Serial.println(" networks found");
-                for (int i = 0; i < n; ++i) {
-                    // Print SSID and RSSI for each network found
-                    Serial.print(i + 1);
-                    Serial.print(": ");
-                    Serial.print(WiFi.SSID(i));
-                    Serial.print(" (");
-                    Serial.print(WiFi.RSSI(i));
-                    Serial.print(")");
-                    Serial.println((WiFi.encryptionType(i) == WIFI_AUTH_OPEN)?" ":"*");
-                    delay(10);
-                }
-            }
-
-        }
-
+}
 
 void setup()
 {
@@ -289,7 +297,6 @@ void setup()
     Serial.begin(115200);
 
     WIFISetUp();
-    //mqttConnect();
 
     iaqSensor.begin(bme68x_I2C_ADDR, Wire);
     output = "0, BSEC library version " + String(iaqSensor.version.major) + "." +
@@ -349,7 +356,7 @@ void loop(void)
         // mqttClient.endMessage();
         updateState();
         if ( (WiFi.status() != WL_CONNECTED) ) {
-            mqttConnect();
+            wifiConnect();
 
         }
         if ( WiFi.status() == WL_CONNECTED ) {
