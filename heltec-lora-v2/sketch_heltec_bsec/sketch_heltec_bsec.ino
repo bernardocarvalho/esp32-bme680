@@ -179,65 +179,60 @@ uint8_t connectMultiWiFi()
 }
 
 
-void mqttConnect(void)
+uint8_t mqttConnect(void)
 {
     char buff[20];
+    uint8_t status = 0;
 
-    //uint8_t status ;
-    Serial.println("Check  Wifi...");
-    // if(wifiMulti.run() == WL_CONNECTED) {
-    if ( WiFi.status() == WL_CONNECTED) { 
-    //if(status == WL_CONNECTED) {
-        OledClear(0, 0, 80, 10);
-        IPAddress ip = WiFi.localIP();
-        sprintf(buff, "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
-        //sprintf(buff, "Ip:%s", WiFi.localIP());
-        oled_display.drawString(0, 0, buff);
-        //oled_display.drawString(100, 0, "WOK");
-        Serial.println("");
-        Serial.println("WiFi connected");
-        Serial.println("IP address: ");
-        Serial.println(WiFi.localIP());
-        Serial.print("\nconnecting...");
-        //while (!client.connect("arduino", "public", "public")) {
-        //while (!client.connect("heltecV2")) { //, "public", "public")) {
+    OledClear(0, 0, 80, 10);
+    IPAddress ip = WiFi.localIP();
+    sprintf(buff, "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
+    //sprintf(buff, "Ip:%s", WiFi.localIP());
+    oled_display.drawString(0, 0, buff);
+    //oled_display.drawString(100, 0, "WOK");
+    Serial.println("");
+    Serial.println("WiFi connected");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("\nconnecting MQTT...");
+    //while (!client.connect("arduino", "public", "public")) {
+    //while (!client.connect("heltecV2")) { //, "public", "public")) {
 
-        mqttClient.beginWill(willTopic, willPayload.length(), willRetain, willQos);
-        mqttClient.print(willPayload);
-        mqttClient.endWill();
-        for (int i = 0; i < 10; i++ ) {
-            //if (mqttClient.connect("heltecV2")) {
-            if (mqttClient.connect(mqttBroker, mqttPort)) {
-                sprintf(buff, "MQTT:%s Connected", mqttBroker);
-                // Serial.print(mqttBroker);
-                Serial.println(buff);
-                break;
-            }
-            //                        { //, "public", "public")) {
-            Serial.print(".");
-            delay(1000UL);
+    mqttClient.beginWill(willTopic, willPayload.length(), willRetain, willQos);
+    mqttClient.print(willPayload);
+    mqttClient.endWill();
+    for (int i = 0; i < 10; i++ ) {
+        //if (mqttClient.connect("heltecV2")) {
+        status = mqttClient.connect(mqttBroker, mqttPort);
+        if (status) {
+        //if (mqttClient.connect(mqttBroker, mqttPort)) {
+            sprintf(buff, " success. %s Connected", mqttBroker);
+            Serial.println(buff);
+            //Serial.println(mqttClient.connected());
+            break;
         }
+        //                        { //, "public", "public")) {
+        Serial.print(".");
+        delay(1000UL);
+    }
 
-    }
-    else {
-        oled_display.drawString(0, 0, "No Wifi Connection");
-    }
     oled_display.display();
+    return status;
 }
 
-void wifiConnect(void)
+uint8_t wifiConnect(void)
 {
     char buff[20];
 
-    uint8_t status ;
-    if ( (WiFi.status() != WL_CONNECTED) || (WiFi.RSSI() == 0) )
+    uint8_t status = WiFi.status();
+    if ( (status != WL_CONNECTED) || (WiFi.RSSI() == 0) )
     {
+        mqttClient.stop();
         OledClear(0, 0, 80, 10);
-        Serial.println(F("\nWiFi lost. Call connectMultiWiFi"));
+        Serial.println(F("No WiFi. (re)Call connectMultiWiFi"));
         status = connectMultiWiFi();
     }
-    Serial.println("Check  Wifi...");
-    mqttConnect();
+    return status;
 }
 
 void WIFISetUp(void)
@@ -356,18 +351,23 @@ void loop(void)
         // mqttClient.endMessage();
         updateState();
         if ( (WiFi.status() != WL_CONNECTED) ) {
-            wifiConnect();
-
+            if ( wifiConnect() == WL_CONNECTED ) {
+                mqttConnect();
+            }
         }
-        if ( WiFi.status() == WL_CONNECTED ) {
-            timeClient.update();
-            mqttClient.poll();
-            if (now > lastMsg + mqttPeriod) {
-                lastMsg = now;
-                Serial.println(timeClient.getFormattedTime());
-                // call poll() regularly to allow the library to send MQTT keep alives which
-                // avoids being disconnected by the broker
-                mqtt_pub_bme680(now);
+        else {
+            if (mqttClient.connected()) {
+                timeClient.update();
+                mqttClient.poll();
+                if (now > lastMsg + mqttPeriod) {
+                    lastMsg = now;
+                    // call poll() regularly to allow the library to send MQTT keep alives which
+                    // avoids being disconnected by the broker
+                    mqtt_pub_bme680(now);
+                }
+            }
+            else {
+                mqttConnect();
             }
         }
         digitalWrite(LED, led_status);  
@@ -380,7 +380,8 @@ void loop(void)
 
 void print_bme680(unsigned long time){
     char buff[80];
-    sprintf(buff, "E:%u W:%u s:%u T:%5.1f P:%5.0f H:%6.1f BVE:%4.1f I:%4.1f", bme68x_errors, bme68x_warnings, time/1000, iaqSensor.temperature,
+    Serial.print(timeClient.getFormattedTime());
+    sprintf(buff, " C:%u E:%u W:%u s:%u T:%5.1f P:%5.0f H:%6.1f BVE:%4.1f I:%4.1f", mqttClient.connected(), bme68x_errors, bme68x_warnings, time/1000, iaqSensor.temperature,
             iaqSensor.pressure/100, iaqSensor.humidity, iaqSensor.breathVocEquivalent, iaqSensor.iaq);
     Serial.println(buff);
     output += ", " + String(iaqSensor.rawTemperature);
