@@ -136,6 +136,7 @@ uint8_t connectMultiWiFi()
     // https://github.com/khoih-prog/WiFiMulti_Generic/blob/main/examples/WiFiMulti/WiFiMulti.ino 
     // #define WIFI_MULTI_1ST_CONNECT_WAITING_MS           500L 
 #define WIFI_MULTI_CONNECT_WAITING_MS                   500L
+    char buff[20];
 
     WiFi.disconnect();
 
@@ -154,6 +155,11 @@ uint8_t connectMultiWiFi()
     }
     if ( status == WL_CONNECTED )
     {
+        OledClear(0, 0, 80, 10);
+        IPAddress ip = WiFi.localIP();
+        sprintf(buff, "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
+        oled_display.drawString(0, 0, buff);
+
         Serial.println(F("WiFi connected after time: ")); //, i);
         Serial.print(F("SSID: ")); //, WiFi.SSID(), F(",RSSI="), WiFi.RSSI());
         Serial.print(WiFi.SSID());//, F(",RSSI="), WiFi.RSSI());
