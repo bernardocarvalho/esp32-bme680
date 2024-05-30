@@ -168,17 +168,19 @@ uint8_t connectMultiWiFi()
 
         Serial.print(F(", Channel: "));// , WiFi.channel(), F(",IP address:"), WiFi.localIP() );
         Serial.println(WiFi.channel()); //, F(",IP address:"), WiFi.localIP() );
+        Serial.println(WiFi.localIP());
         timeClient.begin();
     }
     else
     {
         Serial.println(F("WiFi not connected"));
-
+/*
         if (wifiMulti.run() != WL_CONNECTED)
         {
             Serial.println("WiFi not connected!");
             delay(1000UL);
         }
+        */
     }
 
     return status;
@@ -190,16 +192,15 @@ uint8_t mqttConnect(void)
     char buff[20];
     uint8_t status = 0;
 
-    OledClear(0, 0, 80, 10);
+    //OledClear(0, 0, 80, 10);
     IPAddress ip = WiFi.localIP();
     sprintf(buff, "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
     //sprintf(buff, "Ip:%s", WiFi.localIP());
-    oled_display.drawString(0, 0, buff);
+    //oled_display.drawString(0, 0, buff);
     //oled_display.drawString(100, 0, "WOK");
-    Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
+    //Serial.println("");
+    //Serial.println("WiFi connected");
+    //Serial.println("IP address: ");
     Serial.print("\nconnecting MQTT...");
     //while (!client.connect("arduino", "public", "public")) {
     //while (!client.connect("heltecV2")) { //, "public", "public")) {
